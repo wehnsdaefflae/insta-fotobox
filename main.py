@@ -1,120 +1,135 @@
 # coding=utf-8
 import json
 import random
+import string
 
 import time
 from pathlib import Path
 from typing import Any
 
 import requests
+from requests import Response
 
 import log
 
 
 class ImageBot:
-    def __init__(self, use_scrapfly: bool = True):
+    def __init__(self):
         self.hashtag = ""
+        self.scrapfly_key = None
 
         self.started_at = round(time.time())
         # self.started_at = -2
 
         self.processed = set()
-        self.queue = dict()
 
         self.image_dir = Path("images/")
         self.image_dir.mkdir(exist_ok=True)
 
-        self.use_scrapfly = use_scrapfly
-        if use_scrapfly:
-            log.info("initializing (using scrapfly)...")
-        else:
-            log.info("initializing...")
+        self.post_limit = -1
 
-    def _print_photo(self, image_url: str, image_id: str | None = None):
+        log.info("initializing...")
+
+    def _print_photo(self, image_url: str):
         image = requests.get(image_url)
 
-        file_name = f"{self.hashtag:s}.jpg" if image_id is None else f"{image_id:s}.jpg"
+        file_name = f"{self.hashtag:s}-{round(time.time()):d}.jpg"
         with open(self.image_dir / file_name, mode="wb") as file:
             file.write(image.content)
 
-    def _update_queue(self):
+    def _get_page(self, hashtag: str) -> Response:
+        if self.scrapfly_key is not None:
+            url = f"https://api.scrapfly.io/scrape?key={self.scrapfly_key:s}&url=https%3A%2F%2Fwww.instagram.com%2Fexplore%2Ftags%2F{self.hashtag:s}%2F%3F__a%3D1&tags=project%3Adefault&proxy_pool=public_residential_pool&asp=true"
+        else:
+            url = f"https://www.instagram.com/explore/tags/{hashtag:s}/?__a=1"
+        log.info(f"retrieving images for #{hashtag:s}...")
+
+        return requests.get(url, allow_redirects=False)
+
+    def _get_posts(self) -> set[dict[str, Any]]:
         try:
-            if self.use_scrapfly:
-                url = f"https://api.scrapfly.io/scrape?key=f57deb2ee0e24a37883e09e7f204c645&url=https%3A%2F%2Fwww.instagram.com%2Fexplore%2Ftags%2F{self.hashtag:s}%2F%3F__a%3D1&tags=project%3Adefault&proxy_pool=public_residential_pool&asp=true"
-            else:
-                url = f"https://www.instagram.com/explore/tags/{self.hashtag:s}/?__a=1"
-
-            log.info(f"retrieving images for #{self.hashtag:s}...")
-            page = requests.get(url, allow_redirects=False)
-
+            response = self._get_page(self.hashtag)
         except requests.exceptions.RequestException as e:
             log.error(e)
-            return
+            return set()
 
         try:
-            reply = page.json()
-
+            reply = response.json()
         except requests.exceptions.JSONDecodeError as e:
             log.error(e)
-            return
+            return set()
 
-        if self.use_scrapfly:
+        if self.scrapfly_key is not None:
             try:
                 content = reply["result"]["content"]
             except KeyError as e:
                 log.error(e)
-                return
+                return set()
 
             try:
                 reply = json.loads(content)
             except json.JSONDecodeError as e:
                 log.error(e)
-                return
+                return set()
 
         try:
-            nodes = reply["graphql"]["hashtag"]["edge_hashtag_to_media"]["edges"]
+            node_container_list = reply["graphql"]["hashtag"]["edge_hashtag_to_media"]["edges"]
+            new_posts = set()
+            for container in node_container_list:
+                if (node := container.get("node")) is None or node.get("is_video", True) or node.get("taken_at_timestamp", -1) < self.started_at:
+                    continue
+
+                # "https://instagram.ftxl3-1.fna.fbcdn.net/v/t51.2885-15/284866407_106157872074214_6314192356252402153_n.jpg?stp=dst-jpg_e35&_nc_ht=instagram.ftxl3-1.fna.fbcdn.net&_nc_cat=110&_nc_ohc=Og8G8GLwqZgAX882Aft&edm=ABZsPhsBAAAA&ccb=7-5&oh=00_AT_KlEEkb6oLhAr4eohHPH60DP7mBsXoesP2WPd7jXTyjg&oe=629C4D17&_nc_sid=4efc9f"
+                if (image_url := node.get("display_url")) is None or image_url in self.processed:
+                    continue
+
+                new_posts.add(node)
+
+            return new_posts
 
         except KeyError as e:
             log.error(e)
-            return
+            return set()
 
-        log.info(f"found {len(nodes):d} images")
-        for each_container in nodes:
-            each_node = each_container["node"]
+    def _get_image_urls(self, nodes: set[dict[str, Any]]) -> list[str]:
+        no_nodes = 0
+        posts = list()
+        # take the latest self.post_limit posts during this iteration and add them to the queue
+        for each_node in sorted(nodes, key=lambda x: x["taken_at_timestamp"], reverse=True):
+            if no_nodes >= self.post_limit >= 0:
+                log.warning(f"reached post limit of {self.post_limit:d}.")
+                break
 
-            if each_node.get("is_video", True) or each_node.get("taken_at_timestamp", -1) < self.started_at:             # false, 1653997832
-                log.info("skipping node: is video or was taken before system startup")
-                continue
+            image_url = each_node["display_url"]
 
-            # "https://instagram.ftxl3-1.fna.fbcdn.net/v/t51.2885-15/284866407_106157872074214_6314192356252402153_n.jpg?stp=dst-jpg_e35&_nc_ht=instagram.ftxl3-1.fna.fbcdn.net&_nc_cat=110&_nc_ohc=Og8G8GLwqZgAX882Aft&edm=ABZsPhsBAAAA&ccb=7-5&oh=00_AT_KlEEkb6oLhAr4eohHPH60DP7mBsXoesP2WPd7jXTyjg&oe=629C4D17&_nc_sid=4efc9f"
-            image_url = each_node.get("display_url", None)
-            if image_url is None:
-                log.info("skipping node: missing display_url")
-                continue
+            log.info(f"adding image '{image_url:s}' to print queue")
+            posts.insert(0, image_url)
+            no_nodes += 1
 
-            # "2850262858630868528"
-            post_id = each_node.get("id", None)
-            if post_id is None or post_id in self.processed:
-                log.info("skipping node: missing post_id or already printed")
-                continue
+        return posts
 
-            log.info(f"adding image '{post_id:s}' to print queue")
-            self.queue[post_id] = image_url
-
-    def _process_queue(self):
-        for each_id, each_url in sorted(tuple(self.queue.items()), key=lambda x: x[1]):
-            log.info(f"printing {each_id:s}...")
-            self._print_photo(each_url, image_id=each_id)
-            self.processed.add(each_id)
-            del(self.queue[each_id])
+    def _process_urls(self, image_urls: list[str]):
+        for each_url in image_urls:
+            log.info(f"printing {each_url:s}...")
+            self._print_photo(each_url)
+            self.processed.add(each_url)
 
     def print_new_images(self):
-        if self.hashtag is None:
+        if len(self.hashtag) < 1:
             log.info("no hashtag set")
             return
 
-        self._update_queue()
-        self._process_queue()
+        if self.post_limit < 1:
+            log.info("post limit is below one.")
+            return
+
+        posts = self._get_posts()
+        log.info(f"found {len(posts):d} new images")
+
+        image_urls = self._get_image_urls(posts)
+        log.info(f"processing {len(image_urls):d} images total")
+
+        self._process_urls(image_urls)
 
 
 def get_config() -> dict[str, Any]:
@@ -123,21 +138,27 @@ def get_config() -> dict[str, Any]:
         return json.load(file)
 
 
-def main():
-    image_bot = ImageBot(use_scrapfly=True)
+def clean_hashtag(hashtag: str) -> str:
+    return "".join(x for x in hashtag if x in string.digits + string.ascii_letters)
 
-    # remember all last images
+
+def main():
+    image_bot = ImageBot()
+
     while True:
         # read config
         config = get_config()
 
-        image_bot.hashtag = config.get("hashtag")
-        delay_range = config.get("delay_range_ms")
+        image_bot.scrapfly_key = config.get("scrapfly_key")
+        image_bot.hashtag = clean_hashtag(config.get("hashtag"))
+        image_bot.post_limit = config.get("post_limit")
+
         frame_path = config.get("frame_path")
 
         # get latest image
         image_bot.print_new_images()
 
+        delay_range = config.get("delay_range_ms")
         random_delay = random.uniform(min(delay_range), max(delay_range))
         log.info(f"waiting for {round(random_delay):d} ms...")
         time.sleep(random_delay / 1_000)
