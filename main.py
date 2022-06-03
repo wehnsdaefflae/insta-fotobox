@@ -1,7 +1,6 @@
 # coding=utf-8
 import json
 import random
-import string
 
 import time
 from pathlib import Path
@@ -11,6 +10,7 @@ import requests
 from requests import Response
 
 import log
+from misc import get_config, clean_hashtag
 
 
 class ImageBot:
@@ -130,16 +130,6 @@ class ImageBot:
         log.info(f"processing {len(image_urls):d} images total")
 
         self._process_urls(image_urls)
-
-
-def get_config() -> dict[str, Any]:
-    log.info("reading config file...")
-    with open("config.json", mode="r") as file:
-        return json.load(file)
-
-
-def clean_hashtag(hashtag: str) -> str:
-    return "".join(x for x in hashtag if x in string.digits + string.ascii_letters)
 
 
 def main():
