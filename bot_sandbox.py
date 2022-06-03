@@ -10,56 +10,55 @@ from webdriver_manager.chrome import ChromeDriverManager
 from misc import get_config
 
 
-def main():
-    config = get_config()
+class InstaBot:
+    def __init__(self):
+        self.config = get_config()
 
-    options = Options()
-    # options.add_argument("start-maximized")
+        options = Options()
+        options.add_argument("incognito")
 
-    driver_manager = ChromeDriverManager()
-    executable_path = driver_manager.install()
-    browser = webdriver.Chrome(service=Service(executable_path=executable_path), options=options)
+        driver_manager = ChromeDriverManager()
+        executable_path = driver_manager.install()
+        service = Service(executable_path=executable_path)
+        self.browser = webdriver.Chrome(service=service, options=options)
 
-    browser.implicitly_wait(5)
+        self.browser.implicitly_wait(5)
 
-    browser.get("https://www.instagram.com/")
+        self.browser.get(f"https://www.instagram.com/explore/tags/{self.config['hashtag']:s}/")
 
-    browser.implicitly_wait(5)
+        self.browser.implicitly_wait(5)
 
-    # --- starting clicks
-    necessary_cookies = browser.find_element(by=By.XPATH, value="/html/body/div[4]/div/div/button[1]")
-    necessary_cookies.click()
+    def clear(self):
+        # --- starting clicks
+        necessary_cookies = self.browser.find_element(by=By.XPATH, value="/html/body/div[4]/div/div/button[1]")
+        necessary_cookies.click()
+        time.sleep(5)
 
-    time.sleep(5)
-
-    # --- logging in
-    user_name = browser.find_element(by=By.XPATH, value='//*[@id="loginForm"]/div/div[1]/div/label/input')
-    user_name.send_keys(config["instagram_username"])
-    password = browser.find_element(by=By.XPATH, value='//*[@id="loginForm"]/div/div[2]/div/label/input')
-    password.send_keys(config["instagram_password"])
-    password.submit()
-
-    time.sleep(5)
-
-    # --- getting image urls
-    for i in range(10):
-        browser.get(f"https://www.instagram.com/explore/tags/{config['hashtag']:s}/")
+    def get_image_urls(self) -> set[str]:
+        # --- getting image urls
+        latest = self.browser.find_elements(by=By.XPATH, value='/html/body/div[1]/section/main/article/div[2]/div//img')
 
         time.sleep(5)
 
-        latest = browser.find_elements(by=By.XPATH, value='/html/body/div[1]/div/div[1]/div/div[1]/div/div/div[1]/div[1]/section/main/article/div[2]/div//img')
+        return {each_child.get_property("src") for each_child in latest}
 
-        time.sleep(5)
-
-        image_urls = {each_child.get_property("src") for each_child in latest}
-        print(image_urls)
-
-        time.sleep(60)
-
-    browser.close()
+    def close(self):
+        self.browser.close()
 
     # selenium on headless raspberry pi
     # https://stackoverflow.com/questions/25027385/using-selenium-on-raspberry-pi-headless
+
+
+def main():
+    insta_bot = InstaBot()
+    insta_bot.clear()
+
+    for i in range(10):
+        image_urls = insta_bot.get_image_urls()
+        print(image_urls)
+        time.sleep(60)
+
+    insta_bot.close()
 
 
 if __name__ == "__main__":
