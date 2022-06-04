@@ -1,15 +1,25 @@
 # coding=utf-8
 import json
 import string
+from pathlib import Path
 from typing import Any
+
+import requests
 
 import log
 
 
-def get_config() -> dict[str, Any]:
+def get_config(path: str | None = None) -> dict[str, Any]:
+    path = "config.json" if path is None else path
     log.info("reading config file...")
-    with open("config.json", mode="r") as file:
+    with open(path, mode="r") as file:
         return json.load(file)
+
+
+def save_image_from_url(filename: Path, image_url: str):
+    image = requests.get(image_url)
+    with filename.open(mode="wb") as file:
+        file.write(image.content)
 
 
 def clean_hashtag(hashtag: str) -> str:

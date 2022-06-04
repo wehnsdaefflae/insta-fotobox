@@ -1,157 +1,145 @@
 # coding=utf-8
-import json
-import random
+from __future__ import annotations
 
+import random
 import time
 from pathlib import Path
-from typing import Any
 
-import requests
-from requests import Response
+from PIL import Image
 
+from selenium import webdriver
+
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+
+from webdriver_manager.chrome import ChromeDriverManager
+
+from misc import get_config, clean_hashtag, save_image_from_url
 import log
-from misc import get_config, clean_hashtag
 
 
-class ImageBot:
+class InstaBot:
     def __init__(self):
-        self.hashtag = ""
-        self.scrapfly_key = None
+        options = Options()
+        options.add_argument("incognito")
 
-        self.started_at = round(time.time())
-        # self.started_at = -2
+        driver_manager = ChromeDriverManager()
+        executable_path = driver_manager.install()
+        service = Service(executable_path=executable_path)
+        self.browser = webdriver.Chrome(service=service, options=options)
+        self.browser.get(f"https://www.instagram.com/")
+        self.browser.implicitly_wait(5)
 
-        self.processed = set()
+    def clear(self):
+        log.info("clearing notifications...")
 
-        self.image_dir = Path("images/")
-        self.image_dir.mkdir(exist_ok=True)
+        necessary_cookies = self.browser.find_element(by=By.XPATH, value="/html/body/div[4]/div/div/button[1]")
+        necessary_cookies.click()
+        time.sleep(5)
 
-        self.post_limit = -1
+    def login(self, instagram_username: str, instagram_password: str):
+        log.info("logging in...")
 
-        log.info("initializing...")
+        while self.browser.current_url == "https://www.instagram.com/":
+            username = self.browser.find_element(by=By.XPATH, value='//*[@id="loginForm"]/div/div[1]/div/label/input')
+            username.send_keys(instagram_username)
+            password = self.browser.find_element(by=By.XPATH, value='//*[@id="loginForm"]/div/div[2]/div/label/input')
+            password.send_keys(instagram_password)
+            time.sleep(1)
 
-    def _print_photo(self, image_url: str):
-        image = requests.get(image_url)
+            password.submit()
+            time.sleep(5)
 
-        file_name = f"{self.hashtag:s}-{round(time.time()):d}.jpg"
-        with open(self.image_dir / file_name, mode="wb") as file:
-            file.write(image.content)
+    def get_image_urls(self, hashtag: str, scroll_to_end: int = 0) -> set[str]:
+        self.browser.get(f"https://www.instagram.com/explore/tags/{hashtag:s}/")
 
-    def _get_page(self, hashtag: str) -> Response:
-        if self.scrapfly_key is not None:
-            url = f"https://api.scrapfly.io/scrape?key={self.scrapfly_key:s}&url=https%3A%2F%2Fwww.instagram.com%2Fexplore%2Ftags%2F{self.hashtag:s}%2F%3F__a%3D1&tags=project%3Adefault&proxy_pool=public_residential_pool&asp=true"
-        else:
-            url = f"https://www.instagram.com/explore/tags/{hashtag:s}/?__a=1"
-        log.info(f"retrieving images for #{hashtag:s}...")
+        for i in range(scroll_to_end):
+            time.sleep(5)
+            actions = ActionChains(self.browser)
+            actions.send_keys(Keys.CONTROL + Keys.END)
+            actions.perform()
 
-        return requests.get(url, allow_redirects=False)
+        self.browser.implicitly_wait(5)
+        # --- getting image urls
+        latest = self.browser.find_elements(by=By.XPATH, value='/html/body/div[1]/div/div[1]/div/div[1]/div/div/div[1]/div[1]/section/main/article/div[2]/div//img')
 
-    def _get_posts(self) -> set[dict[str, Any]]:
-        try:
-            response = self._get_page(self.hashtag)
-        except requests.exceptions.RequestException as e:
-            log.error(e)
-            return set()
+        return {each_child.get_property("src") for each_child in latest}
 
-        try:
-            reply = response.json()
-        except requests.exceptions.JSONDecodeError as e:
-            log.error(e)
-            return set()
+    def close(self):
+        log.info("closing bot...")
+        self.browser.close()
 
-        if self.scrapfly_key is not None:
-            try:
-                content = reply["result"]["content"]
-            except KeyError as e:
-                log.error(e)
-                return set()
+    # selenium on headless raspberry pi
+    # https://stackoverflow.com/questions/25027385/using-selenium-on-raspberry-pi-headless
 
-            try:
-                reply = json.loads(content)
-            except json.JSONDecodeError as e:
-                log.error(e)
-                return set()
 
-        try:
-            node_container_list = reply["graphql"]["hashtag"]["edge_hashtag_to_media"]["edges"]
-            new_posts = set()
-            for container in node_container_list:
-                if (node := container.get("node")) is None or node.get("is_video", True) or node.get("taken_at_timestamp", -1) < self.started_at:
-                    continue
+class ImagePrinter:
+    def __init__(self, username: str, password: str, hashtag: str):
+        self.hashtag = hashtag
+        self.bot = InstaBot()
+        self.bot.clear()
+        self.bot.login(username, password)
+        self.image_urls = set()
 
-                # "https://instagram.ftxl3-1.fna.fbcdn.net/v/t51.2885-15/284866407_106157872074214_6314192356252402153_n.jpg?stp=dst-jpg_e35&_nc_ht=instagram.ftxl3-1.fna.fbcdn.net&_nc_cat=110&_nc_ohc=Og8G8GLwqZgAX882Aft&edm=ABZsPhsBAAAA&ccb=7-5&oh=00_AT_KlEEkb6oLhAr4eohHPH60DP7mBsXoesP2WPd7jXTyjg&oe=629C4D17&_nc_sid=4efc9f"
-                if (image_url := node.get("display_url")) is None or image_url in self.processed:
-                    continue
+        self.images = Path("images")
+        self.images.mkdir(exist_ok=True)
 
-                new_posts.add(node)
+    def __enter__(self) -> ImagePrinter:
+        # initial_images = self.bot.get_image_urls(self.hashtag)
+        # self.image_urls.update(initial_images)
+        return self
 
-            return new_posts
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.bot.close()
 
-        except KeyError as e:
-            log.error(e)
-            return set()
+    def _print_image(self, image_url: str, frame_path: str | None):
+        filename = self.images / f"{hash(image_url):d}.jpg"
+        log.info(f"saving image to {filename.as_posix():s}")
+        save_image_from_url(filename, image_url)
 
-    def _get_image_urls(self, nodes: set[dict[str, Any]]) -> list[str]:
-        no_nodes = 0
-        posts = list()
-        # take the latest self.post_limit posts during this iteration and add them to the queue
-        for each_node in sorted(nodes, key=lambda x: x["taken_at_timestamp"], reverse=True):
-            if no_nodes >= self.post_limit >= 0:
-                log.warning(f"reached post limit of {self.post_limit:d}.")
+        background = Image.open(filename)
+        foreground = Image.open(frame_path)
+
+        frame = foreground.resize(background.size)
+        background.paste(frame, box=(0, 0), mask=frame.convert("RGBA"))
+        background.save(filename.with_suffix("").as_posix() + "_framed.jpg")
+
+    def print_new_images(self, max_new_images: int, frame_path: str | None = None):
+        image_urls = self.bot.get_image_urls(self.hashtag, scroll_to_end=1)
+        new_urls = image_urls - self.image_urls
+        log.info(f"found {len(new_urls):d} new images")
+
+        for i, each_url in enumerate(new_urls):
+            if i >= max_new_images:
+                log.warning(f"stopped after {max_new_images:d} new images")
                 break
-
-            image_url = each_node["display_url"]
-
-            log.info(f"adding image '{image_url:s}' to print queue")
-            posts.insert(0, image_url)
-            no_nodes += 1
-
-        return posts
-
-    def _process_urls(self, image_urls: list[str]):
-        for each_url in image_urls:
-            log.info(f"printing {each_url:s}...")
-            self._print_photo(each_url)
-            self.processed.add(each_url)
-
-    def print_new_images(self):
-        if len(self.hashtag) < 1:
-            log.info("no hashtag set")
-            return
-
-        if self.post_limit < 1:
-            log.info("post limit is below one.")
-            return
-
-        posts = self._get_posts()
-        log.info(f"found {len(posts):d} new images")
-
-        image_urls = self._get_image_urls(posts)
-        log.info(f"processing {len(image_urls):d} images total")
-
-        self._process_urls(image_urls)
+            self._print_image(each_url, frame_path)
+            self.image_urls.add(each_url)
 
 
 def main():
-    image_bot = ImageBot()
+    config = get_config()
+    log.info("starting...")
 
     while True:
-        # read config
-        config = get_config()
+        with ImagePrinter(config["instagram_username"], config["instagram_password"], clean_hashtag(config["hashtag"])) as printer:
+            while True:
+                printer.print_new_images(max_new_images=config["max_new_images"], frame_path=config["frame_path"])
 
-        image_bot.scrapfly_key = config.get("scrapfly_key")
-        image_bot.hashtag = clean_hashtag(config.get("hashtag"))
-        image_bot.post_limit = config.get("post_limit")
+                delay_range = config.get("delay_range_ms")
+                random_delay = random.uniform(min(delay_range), max(delay_range)) / 1_000
+                log.info(f"waiting for {round(random_delay):d} seconds...")
+                time.sleep(random_delay)
 
-        frame_path = config.get("frame_path")
-
-        # get latest image
-        image_bot.print_new_images()
-
-        delay_range = config.get("delay_range_ms")
-        random_delay = random.uniform(min(delay_range), max(delay_range))
-        log.info(f"waiting for {round(random_delay):d} ms...")
-        time.sleep(random_delay / 1_000)
+                _config = get_config()
+                if _config != config:
+                    log.warning("config changed, restarting...")
+                    config = _config
+                    break
 
 
 if __name__ == "__main__":
