@@ -9,8 +9,7 @@ import requests
 import log
 
 
-def get_config(path: str | None = None) -> dict[str, Any]:
-    path = "config.json" if path is None else path
+def get_config(path: str) -> dict[str, Any]:
     log.info("reading config file...")
     with open(path, mode="r") as file:
         return json.load(file)

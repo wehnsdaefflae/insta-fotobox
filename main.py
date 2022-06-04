@@ -23,31 +23,34 @@ import log
 
 
 class InstaBot:
-    def __init__(self):
+    def __init__(self, xpaths: dict[str, str]):
+        self.xpaths = dict(xpaths)
+
         options = Options()
         options.add_argument("incognito")
-
         driver_manager = ChromeDriverManager()
         executable_path = driver_manager.install()
         service = Service(executable_path=executable_path)
         self.browser = webdriver.Chrome(service=service, options=options)
+
         self.browser.get(f"https://www.instagram.com/")
         self.browser.implicitly_wait(5)
 
     def clear(self):
         log.info("clearing notifications...")
 
-        necessary_cookies = self.browser.find_element(by=By.XPATH, value="/html/body/div[4]/div/div/button[1]")
-        necessary_cookies.click()
-        time.sleep(5)
+        for each_path in self.xpaths.get("initial_clicks", []):
+            target = self.browser.find_element(by=By.XPATH, value=each_path)
+            target.click()
+            time.sleep(5)
 
     def login(self, instagram_username: str, instagram_password: str):
         log.info("logging in...")
 
         while self.browser.current_url == "https://www.instagram.com/":
-            username = self.browser.find_element(by=By.XPATH, value='//*[@id="loginForm"]/div/div[1]/div/label/input')
+            username = self.browser.find_element(by=By.XPATH, value=self.xpaths["username"])
             username.send_keys(instagram_username)
-            password = self.browser.find_element(by=By.XPATH, value='//*[@id="loginForm"]/div/div[2]/div/label/input')
+            password = self.browser.find_element(by=By.XPATH, value=self.xpaths["password"])
             password.send_keys(instagram_password)
             time.sleep(1)
 
@@ -64,8 +67,8 @@ class InstaBot:
             actions.perform()
 
         self.browser.implicitly_wait(5)
-        # --- getting image urls
-        latest = self.browser.find_elements(by=By.XPATH, value='/html/body/div[1]/div/div[1]/div/div[1]/div/div/div[1]/div[1]/section/main/article/div[2]/div//img')
+        xpath_image_container = self.xpaths["image_container"]
+        latest = self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//img")
 
         return {each_child.get_property("src") for each_child in latest}
 
@@ -78,9 +81,9 @@ class InstaBot:
 
 
 class ImagePrinter:
-    def __init__(self, username: str, password: str, hashtag: str):
+    def __init__(self, username: str, password: str, hashtag: str, xpaths: dict[str, str]):
         self.hashtag = hashtag
-        self.bot = InstaBot()
+        self.bot = InstaBot(xpaths)
         self.bot.clear()
         self.bot.login(username, password)
         self.image_urls = set()
@@ -122,11 +125,11 @@ class ImagePrinter:
 
 
 def main():
-    config = get_config()
+    config = get_config("config.json")
     log.info("starting...")
 
     while True:
-        with ImagePrinter(config["instagram_username"], config["instagram_password"], clean_hashtag(config["hashtag"])) as printer:
+        with ImagePrinter(config["instagram_username"], config["instagram_password"], clean_hashtag(config["hashtag"]), config["xpaths"]) as printer:
             while True:
                 printer.print_new_images(max_new_images=config["max_new_images"], frame_path=config["frame_path"])
 
@@ -135,7 +138,7 @@ def main():
                 log.info(f"waiting for {round(random_delay):d} seconds...")
                 time.sleep(random_delay)
 
-                _config = get_config()
+                _config = get_config("config.json")
                 if _config != config:
                     log.warning("config changed, restarting...")
                     config = _config
