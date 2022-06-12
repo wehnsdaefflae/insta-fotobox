@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import subprocess
 import time
 from pathlib import Path
 
@@ -92,8 +93,8 @@ class ImagePrinter:
         self.images.mkdir(exist_ok=True)
 
     def __enter__(self) -> ImagePrinter:
-        # initial_images = self.bot.get_image_urls(self.hashtag)
-        # self.image_urls.update(initial_images)
+        initial_images = self.bot.get_image_urls(self.hashtag)
+        self.image_urls.update(initial_images)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -101,7 +102,7 @@ class ImagePrinter:
 
     def _print_image(self, image_url: str, frame_path: str | None):
         filename = self.images / f"{hash(image_url):d}.jpg"
-        log.info(f"saving image to {filename.as_posix():s}")
+        log.info(f"saving image to {filename.as_posix():s}...")
         save_image_from_url(filename, image_url)
 
         background = Image.open(filename)
@@ -109,7 +110,14 @@ class ImagePrinter:
 
         frame = foreground.resize(background.size)
         background.paste(frame, box=(0, 0), mask=frame.convert("RGBA"))
-        background.save(filename.with_suffix("").as_posix() + "_framed.jpg")
+        filename_framed = filename.with_suffix("").as_posix() + "_framed.jpg"
+        background.save(filename_framed)
+
+        log.info(f"printing image {filename_framed:s}...")
+        completed_process: subprocess.CompletedProcess = subprocess.run(["lp", filename_framed], capture_output=True, text=True)
+        log.info(f"stdout: {completed_process.stdout:s}")
+        log.error(f"stderr: {completed_process.stderr:s}")
+        log.info(f"returncode: {completed_process.returncode:d}")
 
     def print_new_images(self, max_new_images: int, frame_path: str | None = None):
         image_urls = self.bot.get_image_urls(self.hashtag, scroll_to_end=1)
