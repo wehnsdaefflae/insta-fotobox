@@ -18,8 +18,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
-from webdriver_manager.chrome import ChromeDriverManager
-
 from misc import get_config, clean_hashtag, save_image_from_url
 import log
 
@@ -31,9 +29,6 @@ class InstaBot:
         options = Options()
         options.add_argument("incognito")
         options.add_argument("--headless")
-
-        # driver_manager = ChromeDriverManager()
-        # executable_path = driver_manager.install()
 
         # requires: sudo apt-get install chromium-chromedriver
         executable_path = "/usr/lib/chromium-browser/chromedriver"
@@ -164,7 +159,7 @@ def main():
                         break
 
         except StaleElementReferenceException as e:
-            printer.bot.browser.save_screenshot("stale_element_exception.png")
+            printer.bot.browser.save_screenshot(f"stale_element_exception_{round(time.time() * 1_000):d}.png")
             log.fatal(f"stale element exception: {e:s}")
 
 
