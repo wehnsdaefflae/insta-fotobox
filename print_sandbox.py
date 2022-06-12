@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def print_text(filepath: Path):
-    completed_process: subprocess.CompletedProcess = subprocess.run(["lp", filepath.as_posix()])
+    completed_process: subprocess.CompletedProcess = subprocess.run(["lp", filepath.as_posix()], capture_output=True)
     print(f"out: {completed_process.stdout:s}")
     print(f"err: {completed_process.stderr:s}")
     print(f"returncode: {completed_process.returncode:d}")
