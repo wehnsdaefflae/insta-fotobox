@@ -1,4 +1,6 @@
 # coding=utf-8
+# !/usr/bin/python3 -u
+
 from __future__ import annotations
 
 import random
@@ -63,6 +65,7 @@ class InstaBot:
         self.browser.get(f"https://www.instagram.com/explore/tags/{hashtag:s}/")
 
         for i in range(scroll_to_end):
+            log.info("scrolling to end...")
             time.sleep(5)
             actions = ActionChains(self.browser)
             actions.send_keys(Keys.CONTROL + Keys.END)
@@ -98,7 +101,7 @@ class ImagePrinter:
         self.images.mkdir(exist_ok=True)
 
     def __enter__(self) -> ImagePrinter:
-        initial_images = self.bot.get_image_urls(self.hashtag)
+        initial_images = self.bot.get_image_urls(self.hashtag, scroll_to_end=5)
         self.image_urls.update(initial_images)
         return self
 
