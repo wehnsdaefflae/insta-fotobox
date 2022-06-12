@@ -145,8 +145,17 @@ def main():
     log.info("starting...")
 
     while True:
+        username = config.get("instagram_username")
+        password = config.get("instagram_password")
+        hashtag = config.get("hashtag")
+        if username is None or password is None or hashtag is None:
+            log.error("instagram_username, instagram_password, or hashtag not found in config.json, retrying in 10 seconds...")
+            time.sleep(10)
+            config = get_config("config.json")
+            continue
+
         try:
-            with ImagePrinter(config["instagram_username"], config["instagram_password"], clean_hashtag(config["hashtag"]), config["xpaths"]) as printer:
+            with ImagePrinter(username, password, clean_hashtag(hashtag), config["xpaths"]) as printer:
                 while True:
                     printer.print_new_images(max_new_images=config["max_new_images"], frame_path=config["frame_path"])
 
