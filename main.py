@@ -29,8 +29,13 @@ class InstaBot:
 
         options = Options()
         options.add_argument("incognito")
-        driver_manager = ChromeDriverManager()
-        executable_path = driver_manager.install()
+        options.add_argument("--headless")
+
+        # driver_manager = ChromeDriverManager()
+        # executable_path = driver_manager.install()
+
+        # requires: sudo apt-get install chromium-chromedriver
+        executable_path = "/usr/lib/chromium-browser/chromedriver"
         service = Service(executable_path=executable_path)
         self.browser = webdriver.Chrome(service=service, options=options)
 
@@ -79,6 +84,11 @@ class InstaBot:
 
     # selenium on headless raspberry pi
     # https://stackoverflow.com/questions/25027385/using-selenium-on-raspberry-pi-headless
+
+    # alternative (also to webdriver_manager)
+    # https://stackoverflow.com/questions/64979042/how-to-run-seleniumchrome-on-raspberry-pi-4
+        # sudo apt-get install chromium-chromedriver
+
 
 
 class ImagePrinter:
