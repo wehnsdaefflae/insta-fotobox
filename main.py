@@ -1,5 +1,5 @@
+#!/usr/bin/python3 -u
 # coding=utf-8
-# !/usr/bin/python3 -u
 
 from __future__ import annotations
 
