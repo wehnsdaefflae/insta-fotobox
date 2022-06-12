@@ -10,7 +10,7 @@ def print_text(text: str):
     :param text:
     :return:
     """
-    p = Usb(0x043d, 0x0124, usb_args=1)
+    p = Usb(0x043d, 0x0124)
     p.text(text)
     p.cut()
 
