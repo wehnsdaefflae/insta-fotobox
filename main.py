@@ -13,6 +13,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
@@ -90,7 +91,6 @@ class InstaBot:
         # sudo apt-get install chromium-chromedriver
 
 
-
 class ImagePrinter:
     def __init__(self, username: str, password: str, hashtag: str, xpaths: dict[str, str]):
         self.hashtag = hashtag
@@ -147,20 +147,25 @@ def main():
     log.info("starting...")
 
     while True:
-        with ImagePrinter(config["instagram_username"], config["instagram_password"], clean_hashtag(config["hashtag"]), config["xpaths"]) as printer:
-            while True:
-                printer.print_new_images(max_new_images=config["max_new_images"], frame_path=config["frame_path"])
+        try:
+            with ImagePrinter(config["instagram_username"], config["instagram_password"], clean_hashtag(config["hashtag"]), config["xpaths"]) as printer:
+                while True:
+                    printer.print_new_images(max_new_images=config["max_new_images"], frame_path=config["frame_path"])
 
-                delay_range = config.get("delay_range_ms")
-                random_delay = random.uniform(min(delay_range), max(delay_range)) / 1_000
-                log.info(f"waiting for {round(random_delay):d} seconds...")
-                time.sleep(random_delay)
+                    delay_range = config.get("delay_range_ms")
+                    random_delay = random.uniform(min(delay_range), max(delay_range)) / 1_000
+                    log.info(f"waiting for {round(random_delay):d} seconds...")
+                    time.sleep(random_delay)
 
-                _config = get_config("config.json")
-                if _config != config:
-                    log.warning("config changed, restarting...")
-                    config = _config
-                    break
+                    _config = get_config("config.json")
+                    if _config != config:
+                        log.warning("config changed, restarting...")
+                        config = _config
+                        break
+
+        except StaleElementReferenceException as e:
+            printer.bot.browser.save_screenshot("stale_element_exception.png")
+            log.fatal(f"stale element exception: {e:s}")
 
 
 if __name__ == "__main__":
