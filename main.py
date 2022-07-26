@@ -25,15 +25,16 @@ import log
 
 
 class InstaBot:
-    def __init__(self, xpaths: dict[str, str]):
+    def __init__(self, xpaths: dict[str, str], debug: bool = False):
         self.xpaths = dict(xpaths)
 
         options = Options()
         options.add_argument("incognito")
-        options.add_argument("--headless")
+        if not debug:
+            options.add_argument("--headless")
 
         # requires: sudo apt-get install chromium-chromedriver
-        executable_path = "/usr/lib/chromium-browser/chromedriver"
+        executable_path = "D:/Eigene Dateien/Downloads/chromedriver_win32/chromedriver.exe" if debug else "/usr/lib/chromium-browser/chromedriver"
         service = Service(executable_path=executable_path)
         self.browser = webdriver.Chrome(service=service, options=options)
 
@@ -61,21 +62,33 @@ class InstaBot:
             password.submit()
             time.sleep(5)
 
-    def get_image_urls(self, hashtag: str, scroll_to_end: int = 0) -> set[str]:
+    def get_image_urls(self, hashtag: str, scroll_to_end: int = 0) -> dict[str, str]:
         self.browser.get(f"https://www.instagram.com/explore/tags/{hashtag:s}/")
+        time.sleep(5)
+        xpath_image_container = self.xpaths["image_container"]
 
+        latest = set(self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a"))
         for i in range(scroll_to_end):
             log.info("scrolling to end...")
-            time.sleep(5)
             actions = ActionChains(self.browser)
             actions.send_keys(Keys.CONTROL + Keys.END)
             actions.perform()
+            time.sleep(5)
+            each_page = set(self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a"))
+            log.info(f"found {len(each_page - latest):d} new elements on page.")
+            latest.update(each_page)
 
-        self.browser.implicitly_wait(5)
-        xpath_image_container = self.xpaths["image_container"]
-        latest = self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//img")
+        # self.browser.implicitly_wait(5)
+        log.info(f"found {len(latest):d} images.")
 
-        return {each_child.get_property("src") for each_child in latest}
+        result = dict()
+        for each_image in latest:
+            post_url = each_image.get_property("href")
+            image_element = each_image.find_elements(by=By.XPATH, value="//img")[0]
+            image_url = image_element.get_property("src")
+            result[post_url] = image_url
+
+        return result
 
     def close(self):
         log.info("closing bot...")
@@ -90,19 +103,23 @@ class InstaBot:
 
 
 class ImagePrinter:
-    def __init__(self, username: str, password: str, hashtag: str, xpaths: dict[str, str]):
+    def __init__(self, username: str, password: str, hashtag: str, xpaths: dict[str, str], debug: bool = False):
         self.hashtag = hashtag
-        self.bot = InstaBot(xpaths)
+        self.bot = InstaBot(xpaths, debug=debug)
         self.bot.clear()
         self.bot.login(username, password)
-        self.image_urls = set()
+        self.ignore_posts = set()
+
+        self.debug = debug
 
         self.images = Path("images")
         self.images.mkdir(exist_ok=True)
 
     def __enter__(self) -> ImagePrinter:
+        log.info("retrieving existing images...")
         initial_images = self.bot.get_image_urls(self.hashtag, scroll_to_end=5)
-        self.image_urls.update(initial_images)
+        log.info(f"ignoring {len(initial_images):d} existing images.")
+        self.ignore_posts.update(initial_images.keys())
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -129,15 +146,19 @@ class ImagePrinter:
 
     def print_new_images(self, max_new_images: int, frame_path: str | None = None):
         image_urls = self.bot.get_image_urls(self.hashtag, scroll_to_end=1)
-        new_urls = image_urls - self.image_urls
-        log.info(f"found {len(new_urls):d} new images")
+        new_urls = {each_post_url: each_image_url for each_post_url, each_image_url in image_urls.items() if each_post_url not in self.ignore_posts}
+        log.info(f"found {len(new_urls):d} new images in {len(image_urls):d} retrieved images, ignoring {len(self.ignore_posts):d} images total")
 
-        for i, each_url in enumerate(new_urls):
+        for i, (each_post_url, each_image_url) in enumerate(new_urls.items()):
             if i >= max_new_images:
                 log.warning(f"stopped after {max_new_images:d} new images")
                 break
-            self._print_image(each_url, frame_path)
-            self.image_urls.add(each_url)
+
+            print(f"printing image at {each_post_url:s}...")
+            if not self.debug:
+                self._print_image(each_image_url, frame_path)
+
+            self.ignore_posts.add(each_post_url)
 
 
 def main():
@@ -148,31 +169,39 @@ def main():
         username = config.get("instagram_username")
         password = config.get("instagram_password")
         hashtag = config.get("hashtag")
+        is_debug = config.get("debug_system")
+
+        if is_debug:
+            log.critical("starting in DEBUG mode.")
+        else:
+            log.critical("starting in LIVE mode.")
+
         if username is None or password is None or hashtag is None:
             log.error("instagram_username, instagram_password, or hashtag not found in config.json, retrying in 10 seconds...")
             time.sleep(10)
             config = get_config("config.json")
             continue
 
-        try:
-            with ImagePrinter(username, password, clean_hashtag(hashtag), config["xpaths"]) as printer:
-                while True:
+        with ImagePrinter(username, password, clean_hashtag(hashtag), config["xpaths"], debug=is_debug) as printer:
+            while True:
+                try:
                     printer.print_new_images(max_new_images=config["max_new_images"], frame_path=config["frame_path"])
 
-                    delay_range = config.get("delay_range_ms")
-                    random_delay = random.uniform(min(delay_range), max(delay_range)) / 1_000
-                    log.info(f"waiting for {round(random_delay):d} seconds...")
-                    time.sleep(random_delay)
+                except StaleElementReferenceException as e:
+                    printer.bot.browser.save_screenshot(f"stale_element_exception_{round(time.time() * 1_000):d}.png")
+                    log.fatal(f"stale element exception: {e:s}")
+                    raise e
 
-                    _config = get_config("config.json")
-                    if _config != config:
-                        log.warning("config changed, restarting...")
-                        config = _config
-                        break
+                delay_range = config.get("delay_range_ms")
+                random_delay = random.uniform(min(delay_range), max(delay_range)) / 1_000
+                log.info(f"waiting for {round(random_delay):d} seconds...")
+                time.sleep(random_delay)
 
-        except StaleElementReferenceException as e:
-            printer.bot.browser.save_screenshot(f"stale_element_exception_{round(time.time() * 1_000):d}.png")
-            log.fatal(f"stale element exception: {e:s}")
+                _config = get_config("config.json")
+                if _config != config:
+                    log.warning("config changed, restarting...")
+                    config = _config
+                    break
 
 
 if __name__ == "__main__":
