@@ -66,28 +66,29 @@ class InstaBot:
         self.browser.get(f"https://www.instagram.com/explore/tags/{hashtag:s}/")
         time.sleep(5)
         xpath_image_container = self.xpaths["image_container"]
+        actions = ActionChains(self.browser)
+        actions.send_keys(Keys.PAGE_DOWN)
 
+        result = dict()
         latest = set(self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a"))
         for i in range(scroll_to_end):
-            log.info("scrolling to end...")
-            actions = ActionChains(self.browser)
+            log.info(f"scrolling to end ({i+1:d}/{scroll_to_end:d})...")
             actions.send_keys(Keys.CONTROL + Keys.END)
             actions.perform()
             time.sleep(5)
-            each_page = set(self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a"))
-            log.info(f"found {len(each_page - latest):d} new elements on page.")
-            latest.update(each_page)
+            each_page = self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a")
+            log.info(f"found {len(set(each_page) - latest):d} new elements on page.")
+            for each_image in each_page:
+                if each_image in latest:
+                    continue
+                post_url = each_image.get_property("href")
+                image_element = each_image.find_elements(by=By.XPATH, value="//img")[0]
+                image_url = image_element.get_property("src")
+                result[post_url] = image_url
+                latest.add(each_image)
 
         # self.browser.implicitly_wait(5)
-        log.info(f"found {len(latest):d} images.")
-
-        result = dict()
-        for each_image in latest:
-            post_url = each_image.get_property("href")
-            image_element = each_image.find_elements(by=By.XPATH, value="//img")[0]
-            image_url = image_element.get_property("src")
-            result[post_url] = image_url
-
+        log.info(f"found {len(latest):d} new images total.")
         return result
 
     def close(self):
