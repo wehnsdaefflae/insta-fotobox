@@ -67,7 +67,6 @@ class InstaBot:
         time.sleep(5)
         xpath_image_container = self.xpaths["image_container"]
         actions = ActionChains(self.browser)
-        actions.send_keys(Keys.PAGE_DOWN)
 
         result = dict()
         latest = set(self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a"))
@@ -87,6 +86,7 @@ class InstaBot:
                 result[post_url] = image_url
                 latest.add(each_image)
 
+        # TODO: check key value assignment in result
         # self.browser.implicitly_wait(5)
         log.info(f"found {len(latest):d} new images total.")
         return result
