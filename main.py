@@ -69,26 +69,22 @@ class InstaBot:
         actions = ActionChains(self.browser)
 
         result = dict()
-        latest = set(self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a"))
         for i in range(scroll_to_end):
             log.info(f"scrolling to end ({i+1:d}/{scroll_to_end:d})...")
             actions.send_keys(Keys.CONTROL + Keys.END)
             actions.perform()
             time.sleep(5)
-            each_page = self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a")
-            log.info(f"found {len(set(each_page) - latest):d} new elements on page.")
-            for each_image in each_page:
-                if each_image in latest:
-                    continue
-                post_url = each_image.get_property("href")
-                image_element = each_image.find_elements(by=By.XPATH, value="//img")[0]
+            all_links = set(self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a"))
+            log.info(f"found {len(all_links):d} elements on page.")
+            for each_link in all_links:
+                post_url = each_link.get_property("href")
+                image_element = each_link.find_elements(by=By.XPATH, value=".//img")[0]
                 image_url = image_element.get_property("src")
                 result[post_url] = image_url
-                latest.add(each_image)
 
         # TODO: check key value assignment in result
         # self.browser.implicitly_wait(5)
-        log.info(f"found {len(latest):d} new images total.")
+        log.info(f"found {len(result):d} new images total.")
         return result
 
     def close(self):
@@ -126,7 +122,7 @@ class ImagePrinter:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.bot.close()
 
-    def _print_image(self, image_url: str, frame_path: str | None):
+    def _print_image(self, image_url: str, frame_path: str | None, debug: bool = True):
         filename = self.images / f"{hash(image_url):d}.jpg"
         log.info(f"saving image to {filename.as_posix():s}...")
         save_image_from_url(filename, image_url)
@@ -139,6 +135,9 @@ class ImagePrinter:
         filename_framed = filename.with_suffix("").as_posix() + "_framed.jpg"
         background.save(filename_framed)
 
+        if debug:
+            return
+
         log.info(f"printing image {filename_framed:s}...")
         completed_process: subprocess.CompletedProcess = subprocess.run(["lp", filename_framed], capture_output=True, text=True)
         log.info(f"stdout: {completed_process.stdout:s}")
@@ -147,8 +146,13 @@ class ImagePrinter:
 
     def print_new_images(self, max_new_images: int, frame_path: str | None = None):
         image_urls = self.bot.get_image_urls(self.hashtag, scroll_to_end=1)
-        new_urls = {each_post_url: each_image_url for each_post_url, each_image_url in image_urls.items() if each_post_url not in self.ignore_posts}
-        log.info(f"found {len(new_urls):d} new images in {len(image_urls):d} retrieved images, ignoring {len(self.ignore_posts):d} images total")
+        new_urls = {
+            each_post_url: each_image_url
+            for each_post_url, each_image_url in image_urls.items()
+            if each_post_url not in self.ignore_posts
+        }
+        log.info(f"found {len(new_urls):d} new images in {len(image_urls):d} retrieved images, "
+                 f"ignoring {len(self.ignore_posts):d} images total")
 
         for i, (each_post_url, each_image_url) in enumerate(new_urls.items()):
             if i >= max_new_images:
@@ -156,8 +160,7 @@ class ImagePrinter:
                 break
 
             print(f"printing image at {each_post_url:s}...")
-            if not self.debug:
-                self._print_image(each_image_url, frame_path)
+            self._print_image(each_image_url, frame_path, debug=self.debug)
 
             self.ignore_posts.add(each_post_url)
 
@@ -178,7 +181,8 @@ def main():
             log.critical("starting in LIVE mode.")
 
         if username is None or password is None or hashtag is None:
-            log.error("instagram_username, instagram_password, or hashtag not found in config.json, retrying in 10 seconds...")
+            log.error("instagram_username, instagram_password, or hashtag not found in config.json, retrying in 10 "
+                      "seconds...")
             time.sleep(10)
             config = get_config("config.json")
             continue
