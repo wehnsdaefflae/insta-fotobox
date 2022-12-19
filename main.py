@@ -60,28 +60,24 @@ class InstaBot:
             password.submit()
             time.sleep(10)
 
-    def get_image_urls(self, hashtag: str, scroll_to_end: int = 0) -> dict[str, str]:
+    def get_image_urls(self, hashtag: str, scroll_to_end: int = 0) -> set[str]:
         self.browser.get(f"https://www.instagram.com/explore/tags/{hashtag:s}/")
         time.sleep(5)
-        xpath_image_container = self.xpaths["image_container"]
+        post_images = self.xpaths["post_images"]
         actions = ActionChains(self.browser)
 
-        result = dict()
+        result = set()
         for i in range(scroll_to_end):
             log.info(f"scrolling to end ({i+1:d}/{scroll_to_end:d})...")
             actions.send_keys(Keys.CONTROL + Keys.END)
             actions.perform()
             time.sleep(5)
-            all_links = set(self.browser.find_elements(by=By.XPATH, value=xpath_image_container + "//a"))
-            log.info(f"found {len(all_links):d} elements on page.")
-            for each_link in all_links:
-                post_url = each_link.get_property("href")
-                image_element = each_link.find_elements(by=By.XPATH, value=".//img")[0]
+            all_images = set(self.browser.find_elements(by=By.XPATH, value=post_images))
+            log.info(f"found {len(all_images):d} elements on page.")
+            for image_element in all_images:
                 image_url = image_element.get_property("src")
-                result[post_url] = image_url
+                result.add(image_url)
 
-        # TODO: check key value assignment in result
-        # self.browser.implicitly_wait(5)
         log.info(f"found {len(result):d} new images total.")
         return result
 
@@ -114,7 +110,7 @@ class ImagePrinter:
         log.info("retrieving existing images...")
         initial_images = self.bot.get_image_urls(self.hashtag, scroll_to_end=5)
         log.info(f"ignoring {len(initial_images):d} existing images.")
-        self.ignore_posts.update(initial_images.keys())
+        self.ignore_posts.update(initial_images)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -145,22 +141,22 @@ class ImagePrinter:
     def print_new_images(self, max_new_images: int, frame_path: str | None = None):
         image_urls = self.bot.get_image_urls(self.hashtag, scroll_to_end=1)
         new_urls = {
-            each_post_url: each_image_url
-            for each_post_url, each_image_url in image_urls.items()
-            if each_post_url not in self.ignore_posts
+            each_image_url
+            for each_image_url in image_urls
+            if each_image_url not in self.ignore_posts
         }
         log.info(f"found {len(new_urls):d} new images in {len(image_urls):d} retrieved images, "
                  f"ignoring {len(self.ignore_posts):d} images total")
 
-        for i, (each_post_url, each_image_url) in enumerate(new_urls.items()):
+        for i, each_image_url in enumerate(new_urls):
             if i >= max_new_images:
                 log.warning(f"stopped after {max_new_images:d} new images")
                 break
 
-            print(f"printing image at {each_post_url:s}...")
+            print(f"printing image at {each_image_url:s}...")
             self._print_image(each_image_url, frame_path, debug=self.debug)
 
-            self.ignore_posts.add(each_post_url)
+            self.ignore_posts.add(each_image_url)
 
 
 def main():
