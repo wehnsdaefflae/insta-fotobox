@@ -57,10 +57,8 @@ class InstaBot:
             username.send_keys(instagram_username)
             password = self.browser.find_element(by=By.XPATH, value=self.xpaths["password"])
             password.send_keys(instagram_password)
-            time.sleep(1)
-
             password.submit()
-            time.sleep(5)
+            time.sleep(10)
 
     def get_image_urls(self, hashtag: str, scroll_to_end: int = 0) -> dict[str, str]:
         self.browser.get(f"https://www.instagram.com/explore/tags/{hashtag:s}/")
