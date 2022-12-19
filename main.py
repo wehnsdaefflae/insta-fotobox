@@ -133,7 +133,7 @@ class ImagePrinter:
         filename_framed = filename.with_suffix("").as_posix() + "_framed.jpg"
         background.save(filename_framed)
 
-        if debug:
+        if True or debug:
             return
 
         log.info(f"printing image {filename_framed:s}...")
