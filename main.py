@@ -7,6 +7,7 @@ import random
 import subprocess
 import time
 from pathlib import Path
+from typing import Sequence
 
 from PIL import Image
 
@@ -116,12 +117,15 @@ class ImagePrinter:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.bot.close()
 
-    def _print_image(self, image_url: str, frame_path: str | None, debug: bool = True):
+    def _print_image(self, image_url: str, frame_config: dict[str, str | Sequence[int]], debug: bool = True):
         filename = self.images / f"{hash(image_url):d}.jpg"
         log.info(f"saving image to {filename.as_posix():s}...")
         save_image_from_url(filename, image_url)
 
         background = Image.open(filename)
+        frame_path = Path(frame_config["path"])
+        window_coordinates = frame_config["window"]
+
         foreground = Image.open(frame_path)
 
         frame = foreground.resize(background.size)
@@ -138,7 +142,7 @@ class ImagePrinter:
         log.error(f"stderr: {completed_process.stderr:s}")
         log.info(f"returncode: {completed_process.returncode:d}")
 
-    def print_new_images(self, max_new_images: int, frame_path: str | None = None):
+    def print_new_images(self, max_new_images: int, frame_config: dict[str, str | Sequence[int]] | None = None):
         image_urls = self.bot.get_image_urls(self.hashtag, scroll_to_end=1)
         new_urls = {
             each_image_url
@@ -154,7 +158,7 @@ class ImagePrinter:
                 break
 
             print(f"printing image at {each_image_url:s}...")
-            self._print_image(each_image_url, frame_path, debug=self.debug)
+            self._print_image(each_image_url, frame_config, debug=self.debug)
 
             self.ignore_posts.add(each_image_url)
 
@@ -184,7 +188,7 @@ def main():
         with ImagePrinter(username, password, clean_hashtag(hashtag), config["xpaths"], debug=is_debug) as printer:
             while True:
                 try:
-                    printer.print_new_images(max_new_images=config["max_new_images"], frame_path=config["frame_path"])
+                    printer.print_new_images(max_new_images=config["max_new_images"], frame_config=config["frame"])
 
                 except StaleElementReferenceException as e:
                     printer.bot.browser.save_screenshot(f"stale_element_exception_{round(time.time() * 1_000):d}.png")
