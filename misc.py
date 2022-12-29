@@ -74,6 +74,7 @@ def frame_image(image: Image.Image, frame: Image.Image, window_coordinates: tupl
 if __name__ == "__main__":
     framed = frame_image(
         Image.open("images/6210769181387243502.jpg"),
-        Image.open("resources/gold-picture-frame-1 - rotate.png"),
+        # Image.open("resources/gold-picture-frame-1 - rotate.png"),
+        Image.open("resources/gold-picture-frame-1.png"),
         (147, 137, 1527, 1083))
     framed.show()
