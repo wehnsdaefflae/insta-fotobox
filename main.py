@@ -7,7 +7,6 @@ import random
 import subprocess
 import time
 from pathlib import Path
-from typing import Sequence
 
 from PIL import Image
 
@@ -161,12 +160,14 @@ class ImagePrinter:
 
 
 def main():
-    config = get_config("config.json")
     log.info("starting...")
 
     while True:
-        username = config.get("instagram_username")
-        password = config.get("instagram_password")
+        login_info = get_config("login_info.json")
+        username = login_info.get("instagram_username")
+        password = login_info.get("instagram_password")
+
+        config = get_config("config.json")
         hashtag = config.get("hashtag")
         is_debug = config.get("debug_system")
 
@@ -176,10 +177,9 @@ def main():
             log.critical("starting in LIVE mode.")
 
         if username is None or password is None or hashtag is None:
-            log.error("instagram_username, instagram_password, or hashtag not found in config.json, retrying in 10 "
-                      "seconds...")
+            log.error("instagram_username or instagram_password not found in config.json or hashtag not found in "
+                      "config.json, retrying in 10 seconds...")
             time.sleep(10)
-            config = get_config("config.json")
             continue
 
         with ImagePrinter(username, password, clean_hashtag(hashtag), config["xpaths"], debug=is_debug) as printer:
@@ -201,7 +201,6 @@ def main():
                 _config = get_config("config.json")
                 if _config != config:
                     log.warning("config changed, restarting...")
-                    config = _config
                     break
 
 

@@ -1,0 +1,21 @@
+{
+  "hashtag":                "hickstickyfingershwyn",
+  "delay_range_ms":         [40000, 80000],
+  "max_new_images":         10,
+
+  "frame": {
+    "_path": "resources/gold-picture-frame-1.png",
+    "path": "resources/IMG-20221203-WA0001.png",
+    "_window": [147, 137, 1527, 1083],
+    "window": [62, 79, 1008, 1025]
+  },
+
+  "debug_system":           true,
+
+  "xpaths":                 {
+    "initial_clicks":   ["/html/body/div[2]/div/div/div/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]/div/button[1]"],
+    "username":         "/html/body/div[2]/div/div/div/div[1]/div/div/div/div[1]/section/main/article/div[2]/div[1]/div[2]/form/div/div[1]/div/label/input",
+    "password":         "/html/body/div[2]/div/div/div/div[1]/div/div/div/div[1]/section/main/article/div[2]/div[1]/div[2]/form/div/div[2]/div/label/input",
+    "post_images":      "//a[@href[starts-with(., '/p/')] and @role='link']//img"
+  }
+}

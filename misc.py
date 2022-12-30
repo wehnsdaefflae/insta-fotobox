@@ -12,7 +12,7 @@ import log
 
 
 def get_config(path: str) -> dict[str, Any]:
-    log.info("reading config file...")
+    log.info(f"reading config <{path:s}>...")
     with open(path, mode="r") as file:
         return json.load(file)
 
