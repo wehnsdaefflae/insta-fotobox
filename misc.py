@@ -35,25 +35,25 @@ def fit_frame_to_image(image: Image.Image, frame: Image.Image, window_coordinate
     aspect_ratio_window = window_width / window_height
 
     if aspect_ratio_window < aspect_ratio_image:
-        print("window is too narrow, scaling according to height")
+        log.info("window is too narrow, scaling according to height")
         factor = image_height / window_height
     else:
-        print("window is too wide, scaling according to width")
+        log.info("window is too wide, scaling according to width")
         factor = image_width / window_width
 
     frame_resized = frame.resize((int(frame.size[0] * factor), int(frame.size[1] * factor)))
     resized_window_width = int(window_width * factor)
     resized_window_height = int(window_height * factor)
-    print(f"resized window: {resized_window_width:.0f} x {resized_window_height:.0f}")
+    log.info(f"resized window: {resized_window_width:.0f} x {resized_window_height:.0f}")
 
     scaled_window_coordinates = tuple(x * factor for x in window_coordinates)
     image_position = (
         int(scaled_window_coordinates[0] + max(0., (resized_window_width - image_width) / 2)),
         int(scaled_window_coordinates[1] + max(0., (resized_window_height - image_height) / 2))
     )
-    print(f"image position in frame: {image_position[0]:.0f}, {image_position[1]:.0f}")
+    log.info(f"image position in frame: {image_position[0]:.0f}, {image_position[1]:.0f}")
 
-    print(f"image size: {image.size}, "
+    log.info(f"image size: {image.size}, "
           f"frame size: {frame.size}, "
           f"resized frame size: {frame_resized.size}, "
           f"window size: {window_width:d}x{window_height:d}, "
@@ -65,7 +65,7 @@ def fit_frame_to_image(image: Image.Image, frame: Image.Image, window_coordinate
         int(max(0., (image_width - resized_window_width) / 2)),
         int(max(0., (image_height - resized_window_height) / 2))
     )
-    print(f"crop top left: {crop_top_left}")
+    log.info(f"crop top left: {crop_top_left}")
 
     crop_box = (
         crop_top_left[0],
@@ -73,7 +73,7 @@ def fit_frame_to_image(image: Image.Image, frame: Image.Image, window_coordinate
         crop_top_left[0] + resized_window_width,
         crop_top_left[1] + resized_window_height
     )
-    print(f"crop box: {crop_box}")
+    log.info(f"crop box: {crop_box}")
     cropped_image = image.crop(crop_box)
 
     alpha_channel_frame = ImageOps.invert(frame_resized.split()[3])
@@ -84,7 +84,7 @@ def fit_frame_to_image(image: Image.Image, frame: Image.Image, window_coordinate
         int(scaled_window_coordinates[1] + resized_window_height)
     )
     frame_resized.paste(cropped_image, box=image_position, mask=alpha_channel_frame.crop(mask_box))
-    # framed_image.paste(cropped_image, box=image_position)
+
     return frame_resized.convert("RGB")
 
 

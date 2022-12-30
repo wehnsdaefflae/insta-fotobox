@@ -4,10 +4,13 @@
   "max_new_images":         10,
 
   "frame": {
-    "_path": "resources/gold-picture-frame-1.png",
-    "path": "resources/IMG-20221203-WA0001.png",
-    "_window": [147, 137, 1527, 1083],
-    "window": [62, 79, 1008, 1025]
+    "path":     "resources/IMG-20221203-WA0001.png",
+    "window":   [62, 79, 1008, 1025]
+  },
+
+  "_frame": {
+    "path":    "resources/gold-picture-frame-1.png",
+    "window":  [147, 137, 1527, 1083]
   },
 
   "debug_system":           true,
