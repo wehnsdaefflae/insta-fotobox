@@ -27,7 +27,7 @@ def clean_hashtag(hashtag: str) -> str:
     return "".join(x for x in hashtag if x in string.digits + string.ascii_letters)
 
 
-def frame_image(image: Image.Image, frame: Image.Image, window_coordinates: tuple[int, int, int, int]) -> Image.Image:
+def fit_frame_to_image(image: Image.Image, frame: Image.Image, window_coordinates: tuple[int, int, int, int]) -> Image.Image:
     image_width, image_height = image.size
     aspect_ratio_image = image_width / image_height
     window_width = window_coordinates[2] - window_coordinates[0]
@@ -41,39 +41,71 @@ def frame_image(image: Image.Image, frame: Image.Image, window_coordinates: tupl
         print("window is too wide, scaling according to width")
         factor = image_width / window_width
 
-    framed_image = frame.resize((int(frame.size[0] * factor), int(frame.size[1] * factor)))
+    frame_resized = frame.resize((int(frame.size[0] * factor), int(frame.size[1] * factor)))
     resized_window_width = int(window_width * factor)
     resized_window_height = int(window_height * factor)
     print(f"resized window: {resized_window_width:.0f} x {resized_window_height:.0f}")
 
+    scaled_window_coordinates = tuple(x * factor for x in window_coordinates)
     image_position = (
-        int(window_coordinates[0] * factor + max(0., (resized_window_width - image_width) / 2)),
-        int(window_coordinates[1] * factor + max(0., (resized_window_height - image_height) / 2))
+        int(scaled_window_coordinates[0] + max(0., (resized_window_width - image_width) / 2)),
+        int(scaled_window_coordinates[1] + max(0., (resized_window_height - image_height) / 2))
     )
     print(f"image position in frame: {image_position[0]:.0f}, {image_position[1]:.0f}")
 
     print(f"image size: {image.size}, "
           f"frame size: {frame.size}, "
-          f"resized frame size: {framed_image.size}, "
+          f"resized frame size: {frame_resized.size}, "
           f"window size: {window_width:d}x{window_height:d}, "
           f"resized window size: {resized_window_width:.0f}x{resized_window_height:.0f}, "
           f"image position: {image_position}")
-    cropped_image = image.crop((0, 0, resized_window_width, resized_window_height))
-    alpha_channel_frame = ImageOps.invert(framed_image.split()[3])
-    mask_box = (
-        int(window_coordinates[0] * factor),
-        int(window_coordinates[1] * factor),
-        int(window_coordinates[0] * factor + resized_window_width),
-        int(window_coordinates[1] * factor + resized_window_height)
+
+    # crop image vertically and horizontally centered in window
+    crop_top_left = (
+        int(max(0., (image_width - resized_window_width) / 2)),
+        int(max(0., (image_height - resized_window_height) / 2))
     )
-    framed_image.paste(cropped_image, box=image_position, mask=alpha_channel_frame.crop(mask_box))
+    print(f"crop top left: {crop_top_left}")
+
+    crop_box = (
+        crop_top_left[0],
+        crop_top_left[1],
+        crop_top_left[0] + resized_window_width,
+        crop_top_left[1] + resized_window_height
+    )
+    print(f"crop box: {crop_box}")
+    cropped_image = image.crop(crop_box)
+
+    alpha_channel_frame = ImageOps.invert(frame_resized.split()[3])
+    mask_box = (
+        int(scaled_window_coordinates[0]),
+        int(scaled_window_coordinates[1]),
+        int(scaled_window_coordinates[0] + resized_window_width),
+        int(scaled_window_coordinates[1] + resized_window_height)
+    )
+    frame_resized.paste(cropped_image, box=image_position, mask=alpha_channel_frame.crop(mask_box))
     # framed_image.paste(cropped_image, box=image_position)
-    return framed_image
+    return frame_resized.convert("RGB")
 
 
 if __name__ == "__main__":
-    framed = frame_image(
+    rotated = False
+    steff = False
+
+    if steff:
+        transparent_frame = Image.open("resources/IMG-20221203-WA0001.png")
+        window = 62, 79, 1008, 1025
+
+    elif rotated:
+        transparent_frame = Image.open("resources/gold-picture-frame-1 - rotate.png")
+        window = 137, 147, 1083, 1527
+    else:
+        transparent_frame = Image.open("resources/gold-picture-frame-1.png")
+        window = 147, 137, 1527, 1083
+
+    framed = fit_frame_to_image(
         Image.open("images/6210769181387243502.jpg"),
-        Image.open("resources/gold-picture-frame-1 - rotate.png"),
-        (147, 137, 1527, 1083))
+        transparent_frame,
+        window)
+
     framed.show()

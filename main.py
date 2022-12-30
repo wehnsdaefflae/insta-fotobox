@@ -21,7 +21,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
-from misc import get_config, clean_hashtag, save_image_from_url
+from misc import get_config, clean_hashtag, save_image_from_url, fit_frame_to_image
 import log
 
 
@@ -117,23 +117,20 @@ class ImagePrinter:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.bot.close()
 
-    def _print_image(self, image_url: str, frame_config: dict[str, str | Sequence[int]], debug: bool = True):
+    def _print_image(self, image_url: str, frame_path: Path, window_coordinates: tuple[int, int, int, int], debug: bool = True):
         filename = self.images / f"{hash(image_url):d}.jpg"
         log.info(f"saving image to {filename.as_posix():s}...")
         save_image_from_url(filename, image_url)
 
-        background = Image.open(filename)
-        frame_path = Path(frame_config["path"])
-        window_coordinates = frame_config["window"]
+        image = Image.open(filename)
+        frame = Image.open(frame_path)
 
-        foreground = Image.open(frame_path)
+        framed_image = fit_frame_to_image(image, frame, window_coordinates)
 
-        frame = foreground.resize(background.size)
-        background.paste(frame, box=(0, 0), mask=frame.convert("RGBA"))
         filename_framed = filename.with_suffix("").as_posix() + "_framed.jpg"
-        background.save(filename_framed)
+        framed_image.save(filename_framed)
 
-        if True or debug:
+        if debug:
             return
 
         log.info(f"printing image {filename_framed:s}...")
@@ -142,7 +139,7 @@ class ImagePrinter:
         log.error(f"stderr: {completed_process.stderr:s}")
         log.info(f"returncode: {completed_process.returncode:d}")
 
-    def print_new_images(self, max_new_images: int, frame_config: dict[str, str | Sequence[int]] | None = None):
+    def print_new_images(self, max_new_images: int, frame_path: Path, frame_window: tuple[int, int, int, int]):
         image_urls = self.bot.get_image_urls(self.hashtag, scroll_to_end=1)
         new_urls = {
             each_image_url
@@ -158,7 +155,7 @@ class ImagePrinter:
                 break
 
             print(f"printing image at {each_image_url:s}...")
-            self._print_image(each_image_url, frame_config, debug=self.debug)
+            self._print_image(each_image_url, frame_path, frame_window, debug=self.debug)
 
             self.ignore_posts.add(each_image_url)
 
@@ -188,7 +185,8 @@ def main():
         with ImagePrinter(username, password, clean_hashtag(hashtag), config["xpaths"], debug=is_debug) as printer:
             while True:
                 try:
-                    printer.print_new_images(max_new_images=config["max_new_images"], frame_config=config["frame"])
+                    frame_config = config["frame"]
+                    printer.print_new_images(config["max_new_images"], Path(frame_config["path"]), frame_config["window"])
 
                 except StaleElementReferenceException as e:
                     printer.bot.browser.save_screenshot(f"stale_element_exception_{round(time.time() * 1_000):d}.png")
