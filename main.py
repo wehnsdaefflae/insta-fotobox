@@ -29,7 +29,7 @@ class InstaBot:
         self.xpaths = dict(xpaths)
 
         self.code_file_name = "ENTER_TWO_FACTOR_CODE.txt"
-        Path.unlink(Path(self.code_file_name), missing_ok=False)
+        Path.unlink(Path(self.code_file_name), missing_ok=True)
 
         options = Options()
         options.add_argument("incognito")
