@@ -41,7 +41,7 @@ class InstaBot:
         self.browser.get(f"https://www.instagram.com/")
         self.browser.implicitly_wait(5)
 
-    def clear(self):
+    def clear_notifications(self):
         log.info("clearing notifications...")
 
         for each_path in self.xpaths.get("initial_clicks", []):
@@ -59,6 +59,31 @@ class InstaBot:
             password.send_keys(instagram_password)
             password.submit()
             time.sleep(10)
+
+        if "two_factor" not in self.browser.current_url:
+            print("logged in.")
+            return
+
+        code_file_name = "two_factor_code.txt"
+        log.warning("Two factor authentication required.")
+        open(code_file_name, "w").close()
+
+        while True:
+            with open(code_file_name, mode="r") as file:
+                code = file.read().strip()
+            if len(code) == 6 and code.isdigit():
+                log.info(f"Found code '{code:s}' in '{code_file_name:s}'.")
+                Path.unlink(Path(code_file_name))
+                break
+            log.warning(f"No suitable code found in '{code_file_name:s}'. Please enter six digit verification code and save file. Waiting 10 seconds...")
+            time.sleep(10)
+
+        code_input = self.browser.find_element(by=By.XPATH, value=self.xpaths["two_factor_code"])
+        code_input.send_keys(code)
+        code_input.submit()
+        time.sleep(10)
+
+        print("logged in with 2-fa.")
 
     def get_image_urls(self, hashtag: str, scroll_to_end: int = 0) -> set[str]:
         self.browser.get(f"https://www.instagram.com/explore/tags/{hashtag:s}/")
@@ -97,7 +122,7 @@ class ImagePrinter:
     def __init__(self, username: str, password: str, hashtag: str, xpaths: dict[str, str], debug: bool = False):
         self.hashtag = hashtag
         self.bot = InstaBot(xpaths, debug=debug)
-        self.bot.clear()
+        self.bot.clear_notifications()
         self.bot.login(username, password)
         self.ignore_posts = set()
 
