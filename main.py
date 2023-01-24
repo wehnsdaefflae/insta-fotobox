@@ -28,6 +28,9 @@ class InstaBot:
     def __init__(self, xpaths: dict[str, str], debug: bool = False):
         self.xpaths = dict(xpaths)
 
+        self.code_file_name = "ENTER_TWO_FACTOR_CODE.txt"
+        Path.unlink(Path(self.code_file_name), missing_ok=False)
+
         options = Options()
         options.add_argument("incognito")
         if not debug:
@@ -64,18 +67,17 @@ class InstaBot:
             print("logged in.")
             return
 
-        code_file_name = "two_factor_code.txt"
         log.warning("Two factor authentication required.")
-        open(code_file_name, "w").close()
+        open(self.code_file_name, "w").close()
 
         while True:
-            with open(code_file_name, mode="r") as file:
+            with open(self.code_file_name, mode="r") as file:
                 code = file.read().strip()
             if len(code) == 6 and code.isdigit():
-                log.info(f"Found code '{code:s}' in '{code_file_name:s}'.")
-                Path.unlink(Path(code_file_name))
+                log.info(f"Found code '{code:s}' in '{self.code_file_name:s}'.")
+                Path.unlink(Path(self.code_file_name), missing_ok=False)
                 break
-            log.warning(f"No suitable code found in '{code_file_name:s}'. Please enter six digit verification code and save file. Waiting 10 seconds...")
+            log.warning(f"No suitable code found in '{self.code_file_name:s}'. Please enter six digit verification code and save file. Waiting 10 seconds...")
             time.sleep(10)
 
         code_input = self.browser.find_element(by=By.XPATH, value=self.xpaths["two_factor_code"])
