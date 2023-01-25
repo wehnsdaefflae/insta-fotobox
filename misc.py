@@ -54,11 +54,11 @@ def fit_frame_to_image(image: Image.Image, frame: Image.Image, window_coordinate
     log.info(f"image position in frame: {image_position[0]:.0f}, {image_position[1]:.0f}")
 
     log.info(f"image size: {image.size}, "
-          f"frame size: {frame.size}, "
-          f"resized frame size: {frame_resized.size}, "
-          f"window size: {window_width:d}x{window_height:d}, "
-          f"resized window size: {resized_window_width:.0f}x{resized_window_height:.0f}, "
-          f"image position: {image_position}")
+             f"frame size: {frame.size}, "
+             f"resized frame size: {frame_resized.size}, "
+             f"window size: {window_width:d}x{window_height:d}, "
+             f"resized window size: {resized_window_width:.0f}x{resized_window_height:.0f}, "
+             f"image position: {image_position}")
 
     # crop image vertically and horizontally centered in window
     crop_top_left = (

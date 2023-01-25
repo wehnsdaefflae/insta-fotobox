@@ -7,6 +7,7 @@ import random
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
@@ -25,8 +26,8 @@ import log
 
 
 class InstaBot:
-    def __init__(self, xpaths: dict[str, str], debug: bool = False):
-        self.xpaths = dict(xpaths)
+    def __init__(self, x_paths: dict[str, str], debug: bool = False):
+        self.x_paths = dict(x_paths)
 
         self.code_file_name = "ENTER_TWO_FACTOR_CODE.txt"
         Path.unlink(Path(self.code_file_name), missing_ok=True)
@@ -47,7 +48,7 @@ class InstaBot:
     def clear_notifications(self):
         log.info("clearing notifications...")
 
-        for each_path in self.xpaths.get("initial_clicks", []):
+        for each_path in self.x_paths.get("initial_clicks", []):
             target = self.browser.find_element(by=By.XPATH, value=each_path)
             target.click()
             time.sleep(5)
@@ -56,9 +57,9 @@ class InstaBot:
         log.info("logging in...")
 
         while self.browser.current_url == "https://www.instagram.com/":
-            username = self.browser.find_element(by=By.XPATH, value=self.xpaths["username"])
+            username = self.browser.find_element(by=By.XPATH, value=self.x_paths["username"])
             username.send_keys(instagram_username)
-            password = self.browser.find_element(by=By.XPATH, value=self.xpaths["password"])
+            password = self.browser.find_element(by=By.XPATH, value=self.x_paths["password"])
             password.send_keys(instagram_password)
             password.submit()
             time.sleep(10)
@@ -68,29 +69,38 @@ class InstaBot:
             return
 
         log.warning("Two factor authentication required.")
-        open(self.code_file_name, "w").close()
 
-        while True:
-            with open(self.code_file_name, mode="r") as file:
-                code = file.read().strip()
-            if len(code) == 6 and code.isdigit():
-                log.info(f"Found code '{code:s}' in '{self.code_file_name:s}'.")
-                Path.unlink(Path(self.code_file_name), missing_ok=False)
-                break
-            log.warning(f"No suitable code found in '{self.code_file_name:s}'. Please enter six digit verification code and save file. Waiting 10 seconds...")
+        while True:         # repeat until code is accepted
+            open(self.code_file_name, "w").close()
+
+            while True:     # repeat until code is found
+                with open(self.code_file_name, mode="r") as file:
+                    code = file.read().strip()
+                if len(code) == 6 and code.isdigit():
+                    log.info(f"Found code '{code:s}' in '{self.code_file_name:s}'.")
+                    break
+
+                log.warning(f"No suitable code found in '{self.code_file_name:s}'. Please enter six digit verification code and save "
+                            f"file. Waiting 10 seconds...")
+                time.sleep(10)
+
+            code_input = self.browser.find_element(by=By.XPATH, value=self.x_paths["two_factor_code"])
+            code_input.clear()
+            code_input.send_keys(code)
+            code_input.submit()
             time.sleep(10)
 
-        code_input = self.browser.find_element(by=By.XPATH, value=self.xpaths["two_factor_code"])
-        code_input.send_keys(code)
-        code_input.submit()
-        time.sleep(10)
+            if "two_factor" not in self.browser.current_url:
+                log.info(f"Code accepted. Logged in with 2-FA. Deleting {self.code_file_name:s}...")
+                Path.unlink(Path(self.code_file_name), missing_ok=False)
+                break
 
-        print("logged in with 2-fa.")
+            log.warning("Wrong verification code. Please enter six digit verification code and save file...")
 
     def get_image_urls(self, hashtag: str, scroll_to_end: int = 0) -> set[str]:
         self.browser.get(f"https://www.instagram.com/explore/tags/{hashtag:s}/")
         time.sleep(5)
-        post_images = self.xpaths["post_images"]
+        post_images = self.x_paths["post_images"]
         actions = ActionChains(self.browser)
 
         result = set()
@@ -121,9 +131,9 @@ class InstaBot:
 
 
 class ImagePrinter:
-    def __init__(self, username: str, password: str, hashtag: str, xpaths: dict[str, str], debug: bool = False):
+    def __init__(self, username: str, password: str, hashtag: str, x_paths: dict[str, str], debug: bool = False):
         self.hashtag = hashtag
-        self.bot = InstaBot(xpaths, debug=debug)
+        self.bot = InstaBot(x_paths, debug=debug)
         self.bot.clear_notifications()
         self.bot.login(username, password)
         self.ignore_posts = set()
@@ -143,12 +153,17 @@ class ImagePrinter:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.bot.close()
 
-    def _print_image(self, image_url: str, frame_path: Path, window_coordinates: tuple[int, int, int, int], debug: bool = True):
+    def _print_image(self, image_url: str, frame_config: dict[str, Any], debug: bool = True):
         filename = self.images / f"{hash(image_url):d}.jpg"
         log.info(f"saving image to {filename.as_posix():s}...")
         save_image_from_url(filename, image_url)
 
         image = Image.open(filename)
+
+        frame_info = frame_config["landscape" if image.size[0] > image.size[1] else "portrait"]
+        frame_path = frame_info["path"]
+        window_coordinates = frame_info["window"]
+
         frame = Image.open(frame_path)
 
         framed_image = fit_frame_to_image(image, frame, window_coordinates)
@@ -165,7 +180,7 @@ class ImagePrinter:
         log.error(f"stderr: {completed_process.stderr:s}")
         log.info(f"returncode: {completed_process.returncode:d}")
 
-    def print_new_images(self, max_new_images: int, frame_path: Path, frame_window: tuple[int, int, int, int]):
+    def print_new_images(self, max_new_images: int, frame_config: dict[str, Any]):
         image_urls = self.bot.get_image_urls(self.hashtag, scroll_to_end=1)
         new_urls = {
             each_image_url
@@ -181,7 +196,7 @@ class ImagePrinter:
                 break
 
             print(f"printing image at {each_image_url:s}...")
-            self._print_image(each_image_url, frame_path, frame_window, debug=self.debug)
+            self._print_image(each_image_url, frame_config, debug=self.debug)
 
             self.ignore_posts.add(each_image_url)
 
@@ -212,8 +227,7 @@ def main():
         with ImagePrinter(username, password, clean_hashtag(hashtag), config["xpaths"], debug=is_debug) as printer:
             while True:
                 try:
-                    frame_config = config["frame"]
-                    printer.print_new_images(config["max_new_images"], Path(frame_config["path"]), frame_config["window"])
+                    printer.print_new_images(config["max_new_images"], config["frame"])
 
                 except StaleElementReferenceException as e:
                     printer.bot.browser.save_screenshot(f"stale_element_exception_{round(time.time() * 1_000):d}.png")
