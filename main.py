@@ -85,7 +85,7 @@ class InstaBot:
                 time.sleep(10)
 
             code_input = self.browser.find_element(by=By.XPATH, value=self.x_paths["two_factor_code"])
-            code_input.clear()
+            code_input.send_keys(Keys.CONTROL + "a")
             code_input.send_keys(code)
             code_input.submit()
             time.sleep(10)

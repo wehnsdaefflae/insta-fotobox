@@ -4,10 +4,12 @@
   "max_new_images":         10,
 
   "frame": {
+
     "landscape": {
       "path":    "resources/gold-picture-frame-1.png",
       "window":  [147, 137, 1527, 1083]
     },
+
     "portrait": {
       "path": "resources/gold-picture-frame-1 - rotate.png",
       "window":  [168, 154, 1087, 1513]
