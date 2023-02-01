@@ -1,6 +1,6 @@
 {
   "hashtag":                "hickstickyfingershwyn",
-  "delay_range_ms":         [40000, 80000],
+  "delay_range_ms":         [200000, 400000],
   "max_new_images":         10,
 
   "frame": {
@@ -26,7 +26,7 @@
       ]
   },
 
-  "debug_system":           true,
+  "debug_system":           false,
 
   "xpaths":                 {
     "initial_clicks":   ["/html/body/div[2]/div/div/div/div[2]/div/div/div[1]/div/div[2]/div/div/div/div/div[2]/div/button[1]"],

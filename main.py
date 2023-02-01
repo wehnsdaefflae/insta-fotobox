@@ -240,8 +240,9 @@ def main():
                 time.sleep(random_delay)
 
                 _config = get_config("config.json")
-                if _config != config:
-                    log.warning("config changed, restarting...")
+                _login_info = get_config("login_info.json")
+                if _config != config or _login_info != login_info:
+                    log.warning("config or login info changed, restarting...")
                     break
 
 
